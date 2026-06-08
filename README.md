@@ -19,7 +19,7 @@
 - 回退到历史版本
 - Windows 打包后隐藏 Git 子进程 cmd 闪窗
 - 自带圆角应用图标
-- Tkinter 窗口标题栏左上角图标已内嵌设置
+- 防止 exe 被命名为 git.exe 后无限自我打开
 
 ## 运行环境
 
@@ -37,49 +37,31 @@ python git_project_manager.py
 
 ## 打包成 exe
 
-推荐使用项目内的圆角图标：
-
 ```bash
 pip install pyinstaller
-pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro --icon assets/app.ico
+pyinstaller -F -w git_project_manager.py -n Git项目管理器 --icon assets/app.ico
 ```
 
-如果只是运行源码，窗口左上角图标也会生效，因为 v2.5 已经把 ico 内嵌到 Python 文件中。
-
-## GitHub 首次推送流程
-
-1. 在 GitHub 创建一个新仓库
-2. 复制仓库地址，推荐 SSH：
+不要把生成的 exe 命名为：
 
 ```text
-git@github.com:yourname/your-repo.git
+git.exe
 ```
 
-也可以粘贴 HTTPS，工具默认会自动转换成 SSH：
-
-```text
-https://github.com/yourname/your-repo.git
-```
-
-3. 打开工具
-4. 导入本地项目路径
-5. 进入「初始化 / GitHub」
-6. 填写远程地址
-7. 点击「初始化 / 关联远程 / 推送」
+因为本工具内部需要调用真正的 Git。如果工具本身叫 `git.exe`，系统可能把工具当成 Git 命令反复启动。
 
 ## 常见问题
 
-### 为什么 exe 图标变了，但窗口左上角没变？
+### 下载后的 exe 无限自动打开怎么办？
 
-PyInstaller 的 `--icon` 主要控制 exe 文件图标和任务栏图标。Tkinter 窗口标题栏图标需要代码里调用 `iconbitmap()`。v2.5 已修复。
+先用任务管理器结束进程，或执行：
 
-### 打包后点击按钮会闪 cmd 窗口
+```bat
+taskkill /F /IM git.exe
+taskkill /F /IM Git项目管理器.exe
+```
 
-v2.4 已修复。工具在 Windows 下调用 Git 子进程时使用隐藏窗口参数。
-
-### 为什么明明配置了 SSH，还是弹 GitHub 登录？
-
-因为远程地址是 HTTPS。v2.3 起工具默认开启「GitHub HTTPS 自动转 SSH」。
+然后检查 exe 名字，不要叫 `git.exe`。v2.6 起已加入启动保护，并且程序内部会查找真正的 Git 路径，不再直接调用裸命令 `git`。
 
 ## License
 

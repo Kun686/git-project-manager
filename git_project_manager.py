@@ -36,6 +36,7 @@ import queue
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass, asdict
@@ -307,6 +308,108 @@ class GitCommandError(RuntimeError):
         super().__init__(f"Git 命令失败：{' '.join(command)}\n{output}")
 
 
+def app_executable_path() -> Path:
+    """
+    返回当前程序实际 exe 路径。
+    - 源码运行：python.exe
+    - PyInstaller 打包：当前打包后的 exe
+    """
+    try:
+        return Path(sys.executable).resolve()
+    except Exception:
+        return Path("")
+
+
+def same_file_safe(a: Path, b: Path) -> bool:
+    try:
+        return a.exists() and b.exists() and a.samefile(b)
+    except Exception:
+        try:
+            return str(a.resolve()).lower() == str(b.resolve()).lower()
+        except Exception:
+            return False
+
+
+def find_git_executable() -> Optional[str]:
+    """
+    安全查找真正的 git.exe。
+
+    修复 v2.5 的一个危险边界：
+    如果用户把本程序 exe 命名为 git.exe，或者下载后所在目录里有错误的 git.exe，
+    subprocess.run(["git", ...]) 可能会把本程序自己当成 git 启动，造成无限自我打开。
+
+    这里不再直接调用 "git"，而是先用 shutil.which 找到真实路径，并且拒绝当前程序自身。
+    """
+    current_exe = app_executable_path()
+
+    candidates: List[Path] = []
+
+    found = shutil.which("git")
+    if found:
+        candidates.append(Path(found))
+
+    if os.name == "nt":
+        candidates.extend([
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "cmd" / "git.exe",
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "git.exe",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Git" / "cmd" / "git.exe",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Git" / "bin" / "git.exe",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Git" / "cmd" / "git.exe",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Git" / "bin" / "git.exe",
+        ])
+
+    seen = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+
+        key = str(resolved).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+
+        if not resolved.exists():
+            continue
+
+        if same_file_safe(resolved, current_exe):
+            continue
+
+        # 防止把当前程序目录下误放的假 git.exe / 重命名版自身当成 git
+        try:
+            if os.name == "nt" and resolved.parent == current_exe.parent and resolved.name.lower() == "git.exe":
+                # 如果同目录 git.exe 不是标准 Git 安装路径，跳过。
+                text = str(resolved).lower().replace("\\", "/")
+                if "/git/cmd/git.exe" not in text and "/git/bin/git.exe" not in text:
+                    continue
+        except Exception:
+            pass
+
+        return str(resolved)
+
+    return None
+
+
+GIT_EXE_CACHE: Optional[str] = None
+
+
+def get_git_executable() -> str:
+    global GIT_EXE_CACHE
+
+    if GIT_EXE_CACHE and Path(GIT_EXE_CACHE).exists():
+        return GIT_EXE_CACHE
+
+    git_exe = find_git_executable()
+    if not git_exe:
+        raise RuntimeError(
+            "没有找到真正的 Git 程序。请确认已安装 Git，并且不要把本工具 exe 命名为 git.exe。"
+        )
+
+    GIT_EXE_CACHE = git_exe
+    return git_exe
+
+
 def hidden_subprocess_kwargs() -> Dict[str, object]:
     """
     Windows 打包成 -w / --windowed exe 后，调用 git.exe 等子进程时容易闪出 cmd 窗口。
@@ -370,13 +473,13 @@ def run_git(
     check: bool = True,
     timeout: int = 180,
 ) -> str:
-    return run_cmd(["git"] + args, cwd, check=check, timeout=timeout)
+    return run_cmd([get_git_executable()] + args, cwd, check=check, timeout=timeout)
 
 
 def is_git_available() -> bool:
     try:
         subprocess.run(
-            ["git", "--version"],
+            [get_git_executable(), "--version"],
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -582,7 +685,7 @@ def commit_staged(path: Path, subject: str, body: str = "") -> str:
     body = body.strip()
 
     diff = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],
+        [get_git_executable(), "diff", "--cached", "--quiet"],
         cwd=str(path),
         text=True,
         encoding="utf-8",
@@ -2337,6 +2440,23 @@ class GitManagerProApp(tk.Tk):
 
 
 def main() -> None:
+    # 防止用户把本工具 exe 命名为 git.exe 后，被自身的 Git 调用无限拉起。
+    if os.name == "nt":
+        try:
+            if Path(sys.executable).name.lower() == "git.exe":
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showerror(
+                    "启动已阻止",
+                    "请不要把本工具命名为 git.exe。\n\n"
+                    "因为程序内部需要调用真正的 Git，命名为 git.exe 可能导致程序无限自我打开。\n"
+                    "请改名为 Git项目管理器.exe 后再运行。"
+                )
+                root.destroy()
+                return
+        except Exception:
+            return
+
     app = GitManagerProApp()
     app.mainloop()
 
