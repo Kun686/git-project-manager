@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# build
+build/
+dist/
+*.spec
+
+# runtime
+*.log
+logs/
+.cache/
+tmp/
+temp/
+
+# env
+.env
+.env.*
+!.env.example
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ===== Git Project Manager safe defaults =====
+
+# logs
+log/
+runtime/logs/
+storage/logs/
+
+.tox/
+.nox/
+.coverage
+htmlcov/
+
+# virtual env
+env/
+ENV/
+
+# environment
+
+# Node
+node_modules/
+.vite/
+.next/
+.nuxt/
+coverage/
+
+# cache/temp
+cache/
+
+# database/local runtime
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+data/*.db
+
+# secrets
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+
+# ===== End safe defaults =====
