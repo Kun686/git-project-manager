@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.5
+
+- 修复窗口左上角标题栏图标没有变化的问题。
+- 将 ico 图标内嵌进 Python 文件，运行源码和打包 exe 都会设置 Tkinter 窗口图标。
+- 新增 Windows AppUserModelID，改善任务栏图标识别。
+
 ## v0.2.4
 
 - 修复 Windows 打包 exe 后执行 Git 命令时闪出 cmd 窗口的问题。
@@ -10,15 +16,12 @@
 ## v0.2.3
 
 - 新增「GitHub HTTPS 自动转 SSH」开关，默认开启。
-- 如果远程地址是 https://github.com/...，会自动改成 git@github.com:...，避免反复弹 GitHub 登录。
+- 如果远程地址是 https://github.com/...，会自动改成 git@github.com:...。
 - 修复项目列表、改动文件列表点击其他区域后选中状态消失的问题。
-- Listbox 已设置 exportselection=False。
 
 ## v0.2.2
 
 - 运行日志改为实时输出。
-- 初始化、提交、清理、检查、pull、push 等关键步骤会边执行边写入日志。
-- push / pull 前会显示正在执行的 Git 命令，避免长时间等待时看起来像卡死。
 
 ## v0.2.1
 

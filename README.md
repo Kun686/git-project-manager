@@ -19,6 +19,7 @@
 - 回退到历史版本
 - Windows 打包后隐藏 Git 子进程 cmd 闪窗
 - 自带圆角应用图标
+- Tkinter 窗口标题栏左上角图标已内嵌设置
 
 ## 运行环境
 
@@ -43,11 +44,7 @@ pip install pyinstaller
 pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro --icon assets/app.ico
 ```
 
-生成文件：
-
-```text
-dist/Git项目管理器Pro.exe
-```
+如果只是运行源码，窗口左上角图标也会生效，因为 v2.5 已经把 ico 内嵌到 Python 文件中。
 
 ## GitHub 首次推送流程
 
@@ -70,36 +67,19 @@ https://github.com/yourname/your-repo.git
 6. 填写远程地址
 7. 点击「初始化 / 关联远程 / 推送」
 
-如果远程仓库不是空的，例如已有 README、LICENSE、`.gitignore`，工具会在推送前自动执行拉取合并。
-
 ## 常见问题
+
+### 为什么 exe 图标变了，但窗口左上角没变？
+
+PyInstaller 的 `--icon` 主要控制 exe 文件图标和任务栏图标。Tkinter 窗口标题栏图标需要代码里调用 `iconbitmap()`。v2.5 已修复。
 
 ### 打包后点击按钮会闪 cmd 窗口
 
-v2.4 已修复。工具在 Windows 下调用 Git 子进程时使用隐藏窗口参数：
-
-```text
-STARTF_USESHOWWINDOW
-CREATE_NO_WINDOW
-```
+v2.4 已修复。工具在 Windows 下调用 Git 子进程时使用隐藏窗口参数。
 
 ### 为什么明明配置了 SSH，还是弹 GitHub 登录？
 
-因为远程地址是 HTTPS：
-
-```text
-https://github.com/yourname/your-repo.git
-```
-
-HTTPS 不会使用本地 SSH key，会触发 GitHub Credential Manager 登录。
-
-改成 SSH 即可：
-
-```text
-git@github.com:yourname/your-repo.git
-```
-
-v2.3 起工具默认开启「GitHub HTTPS 自动转 SSH」。
+因为远程地址是 HTTPS。v2.3 起工具默认开启「GitHub HTTPS 自动转 SSH」。
 
 ## License
 
