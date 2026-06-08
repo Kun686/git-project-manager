@@ -1,4 +1,4 @@
-# Git Project Manager Pro
+# Git Project Manager
 
 一个面向个人开发者的本地 Git 项目管理器。
 
