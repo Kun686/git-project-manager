@@ -7,6 +7,7 @@
 - 管理多个本地项目路径
 - 初始化现有项目为 Git 仓库
 - 绑定 GitHub 远程仓库
+- GitHub HTTPS 远程自动转换为 SSH
 - 远程非空仓库自动拉取合并
 - 一键提交 / 推送单个或多个项目
 - 实时运行日志
@@ -21,6 +22,7 @@
 
 - Python 3.10+
 - Git
+- 已配置 GitHub SSH key，推荐使用 SSH 远程地址
 
 本项目只使用 Python 标准库和 Tkinter，不依赖 PyQt、customtkinter 等第三方 GUI 库。
 
@@ -34,7 +36,7 @@ python git_project_manager.py
 
 ```bash
 pip install pyinstaller
-pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro
+pyinstaller -F -w git_project_manager.py -n Git项目管理器
 ```
 
 生成文件：
@@ -46,13 +48,13 @@ dist/Git项目管理器Pro.exe
 ## GitHub 首次推送流程
 
 1. 在 GitHub 创建一个新仓库
-2. 复制仓库地址，例如：
+2. 复制仓库地址，推荐 SSH：
 
 ```text
 git@github.com:yourname/your-repo.git
 ```
 
-或：
+也可以粘贴 HTTPS，工具默认会自动转换成 SSH：
 
 ```text
 https://github.com/yourname/your-repo.git
@@ -66,49 +68,25 @@ https://github.com/yourname/your-repo.git
 
 如果远程仓库不是空的，例如已有 README、LICENSE、`.gitignore`，工具会在推送前自动执行拉取合并。
 
-## 安全策略
-
-默认会阻止以下内容进入 Git：
-
-```text
-*.log
-logs/
-__pycache__/
-*.pyc
-.venv/
-venv/
-node_modules/
-dist/
-build/
-.env
-.env.*
-*.db
-*.sqlite
-*.pem
-*.key
-```
-
-如果检测到疑似 token、password、api_key、secret，也会阻止提交。
-
 ## 常见问题
 
-### GitHub push 连接失败
+### 为什么明明配置了 SSH，还是弹 GitHub 登录？
 
-如果日志出现：
+因为你的远程地址是 HTTPS：
 
 ```text
-Failed to connect to github.com port 443
+https://github.com/yourname/your-repo.git
 ```
 
-这通常不是工具代码问题，而是本机网络、代理、DNS、GitHub 连接或 HTTPS 证书链路问题。
+HTTPS 不会使用本地 SSH key，会触发 GitHub Credential Manager 登录。
 
-可以改用 SSH 远程地址：
+改成 SSH 即可：
 
 ```text
 git@github.com:yourname/your-repo.git
 ```
 
-也可以检查本机代理配置。
+v2.3 起工具默认开启「GitHub HTTPS 自动转 SSH」。
 
 ## License
 

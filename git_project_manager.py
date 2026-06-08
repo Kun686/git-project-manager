@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Git 项目管理器
+Git 项目管理器 Pro v2.3
 ============================================================
 
 定位：
@@ -14,11 +14,11 @@ Git 项目管理器
 - 提交前执行轻量 CI 检查
 
 运行：
-    python git_project_manager.py.py
+    python git_project_manager.py
 
 打包：
     pip install pyinstaller
-    pyinstaller -F -w git_project_manager.py.py -n Git项目管理器Pro
+    pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro
 
 说明：
 - 纯 Python 标准库 + Tkinter，方便打包 exe。
@@ -386,10 +386,78 @@ def remote_url(path: Path) -> str:
     return out.strip()
 
 
-def set_or_add_origin(path: Path, url: str) -> str:
+def github_https_to_ssh(url: str) -> str:
+    """
+    将 GitHub HTTPS 远程地址转换为 SSH 地址。
+
+    示例：
+    https://github.com/Kun686/git-project-manager.git
+    -> git@github.com:Kun686/git-project-manager.git
+
+    为什么需要：
+    - HTTPS 会触发 GitHub Credential Manager 登录弹窗
+    - SSH 才会使用用户本地已经配置好的 SSH key
+    """
+    raw = (url or "").strip()
+    if not raw:
+        return raw
+
+    # 兼容用户复制时带尾部斜杠
+    raw = raw.rstrip("/")
+
+    prefix = "https://github.com/"
+    if not raw.lower().startswith(prefix):
+        return raw
+
+    repo_part = raw[len(prefix):].strip("/")
+    if not repo_part:
+        return raw
+
+    if not repo_part.endswith(".git"):
+        repo_part += ".git"
+
+    return f"git@github.com:{repo_part}"
+
+
+def is_github_https_remote(url: str) -> bool:
+    return (url or "").strip().lower().startswith("https://github.com/")
+
+
+def ensure_ssh_origin_if_github_https(
+    path: Path,
+    *,
+    prefer_ssh: bool,
+    emit: Optional[Callable[[str], None]] = None,
+) -> str:
+    """
+    如果 origin 是 GitHub HTTPS，并且用户选择优先 SSH，则自动改成 SSH。
+    """
+    if not prefer_ssh:
+        return "未开启 GitHub HTTPS 自动转 SSH，保持当前远程地址。"
+
+    existing = remote_url(path)
+    if not existing:
+        return "未配置 origin，跳过远程地址转换。"
+
+    if not is_github_https_remote(existing):
+        return f"当前 origin 已不是 GitHub HTTPS，保持不变：{existing}"
+
+    ssh_url = github_https_to_ssh(existing)
+    run_git(["remote", "set-url", "origin", ssh_url], path, check=True, timeout=30)
+    msg = f"已将 GitHub HTTPS 远程转换为 SSH：{ssh_url}"
+    if emit:
+        emit(msg)
+    return msg
+
+
+def set_or_add_origin(path: Path, url: str, *, prefer_ssh: bool = False) -> str:
     url = url.strip()
     if not url:
         raise ValueError("远程地址不能为空。")
+
+    if prefer_ssh:
+        converted = github_https_to_ssh(url)
+        url = converted
 
     existing = remote_url(path)
     if existing:
@@ -973,6 +1041,7 @@ def commit_and_push_project(
     precheck: bool,
     allow_risky: bool,
     auto_pull_before_push: bool = True,
+    prefer_ssh_remote: bool = True,
     emit: Optional[Callable[[str], None]] = None,
 ) -> str:
     path = project.path_obj
@@ -1006,6 +1075,7 @@ def commit_and_push_project(
     if not changed:
         add("没有检测到文件变化。")
         if push:
+            add(ensure_ssh_origin_if_github_https(path, prefer_ssh=prefer_ssh_remote, emit=emit))
             if auto_pull_before_push:
                 add(pull_remote_before_push(path, project.default_branch, emit=emit))
             add(push_current_branch(path, project.default_branch, set_upstream=False, emit=emit))
@@ -1053,6 +1123,7 @@ def commit_and_push_project(
     add(commit_staged(path, subject, body))
 
     if push:
+        add(ensure_ssh_origin_if_github_https(path, prefer_ssh=prefer_ssh_remote, emit=emit))
         if auto_pull_before_push:
             add(pull_remote_before_push(path, project.default_branch, emit=emit))
         add(push_current_branch(path, project.default_branch, set_upstream=False, emit=emit))
@@ -1073,6 +1144,7 @@ def init_remote_and_push(
     precheck: bool,
     allow_risky: bool,
     auto_pull_before_push: bool = True,
+    prefer_ssh_remote: bool = True,
     emit: Optional[Callable[[str], None]] = None,
 ) -> str:
     path = project.path_obj
@@ -1103,8 +1175,13 @@ def init_remote_and_push(
         add("开始检查/生成 GitHub Actions CI。")
         add(write_basic_github_actions(path))
 
+    if prefer_ssh_remote and is_github_https_remote(remote):
+        converted_remote = github_https_to_ssh(remote)
+        add(f"检测到 GitHub HTTPS 地址，已自动改用 SSH：{converted_remote}")
+        remote = converted_remote
+
     add("开始关联远程 origin。")
-    add(set_or_add_origin(path, remote))
+    add(set_or_add_origin(path, remote, prefer_ssh=False))
 
     add("开始扫描误提交风险。")
     fatal, warnings = detect_risky_files(path)
@@ -1328,7 +1405,7 @@ class GitManagerProApp(tk.Tk):
         title_box = tk.Frame(header, bg=Colors.BG)
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.label(title_box, "Git 项目管理器 Pro v2.2", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
+        self.label(title_box, "Git 项目管理器 Pro v2.3", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
         self.label(
             title_box,
             "管理本地仓库、初始化 GitHub 远程、自动拉取合并、提交前检查、误提交拦截、历史回退。",
@@ -1368,6 +1445,7 @@ class GitManagerProApp(tk.Tk):
         self.project_list = tk.Listbox(
             list_frame,
             selectmode=tk.EXTENDED,
+            exportselection=False,
             bd=0,
             highlightthickness=1,
             highlightbackground=Colors.BORDER,
@@ -1396,6 +1474,7 @@ class GitManagerProApp(tk.Tk):
         options.pack(fill=tk.X, padx=18, pady=(0, 18))
 
         self.push_var = tk.BooleanVar(value=True)
+        self.prefer_ssh_var = tk.BooleanVar(value=True)
         self.auto_pull_var = tk.BooleanVar(value=True)
         self.backup_var = tk.BooleanVar(value=True)
         self.clean_var = tk.BooleanVar(value=True)
@@ -1405,6 +1484,7 @@ class GitManagerProApp(tk.Tk):
 
         for text, var, danger in [
             ("提交后 push 到远程", self.push_var, False),
+            ("GitHub HTTPS 自动转 SSH", self.prefer_ssh_var, False),
             ("远程非空自动拉取合并", self.auto_pull_var, False),
             ("提交前创建备份分支", self.backup_var, False),
             ("提交前清理 cache/log", self.clean_var, False),
@@ -1488,6 +1568,7 @@ class GitManagerProApp(tk.Tk):
         self.change_list = tk.Listbox(
             root,
             selectmode=tk.EXTENDED,
+            exportselection=False,
             bd=0,
             highlightthickness=1,
             highlightbackground=Colors.BORDER,
@@ -1553,6 +1634,7 @@ class GitManagerProApp(tk.Tk):
         self.ignore_extra_list = tk.Listbox(
             root,
             selectmode=tk.EXTENDED,
+            exportselection=False,
             bd=0,
             highlightthickness=1,
             highlightbackground=Colors.BORDER,
@@ -1876,6 +1958,7 @@ class GitManagerProApp(tk.Tk):
                         precheck=self.precheck_var.get(),
                         allow_risky=self.allow_risky_var.get(),
                         auto_pull_before_push=self.auto_pull_var.get(),
+                        prefer_ssh_remote=self.prefer_ssh_var.get(),
                         emit=emit,
                     )
                 except Exception as exc:
@@ -1950,6 +2033,7 @@ class GitManagerProApp(tk.Tk):
                     precheck=self.precheck_var.get(),
                     allow_risky=self.allow_risky_var.get(),
                     auto_pull_before_push=self.auto_pull_var.get(),
+                    prefer_ssh_remote=self.prefer_ssh_var.get(),
                     emit=emit,
                 )
                 emit("初始化 / 绑定远程 / 推送流程结束。")
