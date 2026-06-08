@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.4
+
+- 修复 Windows 打包 exe 后执行 Git 命令时闪出 cmd 窗口的问题。
+- 所有 Git 子进程统一使用 STARTF_USESHOWWINDOW + CREATE_NO_WINDOW。
+- 新增圆角应用图标 assets/app.ico。
+- README 新增带图标打包命令。
+
 ## v0.2.3
 
 - 新增「GitHub HTTPS 自动转 SSH」开关，默认开启。

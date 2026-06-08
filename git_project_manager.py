@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Git 项目管理器
+Git 项目管理器 Pro v2.4
 ============================================================
 
 定位：
@@ -50,7 +50,7 @@ from tkinter import ttk
 # App Config
 # ============================================================
 
-APP_NAME = "Git 项目管理器"
+APP_NAME = "Git 项目管理器 Pro v2.4"
 APP_DIR = Path.home() / ".git_project_manager"
 CONFIG_FILE = APP_DIR / "projects_pro.json"
 
@@ -302,6 +302,37 @@ class GitCommandError(RuntimeError):
         super().__init__(f"Git 命令失败：{' '.join(command)}\n{output}")
 
 
+def hidden_subprocess_kwargs() -> Dict[str, object]:
+    """
+    Windows 打包成 -w / --windowed exe 后，调用 git.exe 等子进程时容易闪出 cmd 窗口。
+    这里统一隐藏子进程控制台窗口。
+
+    注意：
+    - 这不会隐藏主程序窗口。
+    - 如果 GitHub HTTPS 触发 Credential Manager 登录弹窗，那是认证窗口，不是 cmd。
+      推荐使用 SSH 远程地址。
+    """
+    if os.name != "nt":
+        return {}
+
+    kwargs: Dict[str, object] = {}
+
+    try:
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0
+        kwargs["startupinfo"] = startupinfo
+    except Exception:
+        pass
+
+    try:
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    except Exception:
+        pass
+
+    return kwargs
+
+
 def run_cmd(
     cmd: List[str],
     cwd: Path,
@@ -319,6 +350,7 @@ def run_cmd(
         stderr=subprocess.STDOUT,
         shell=False,
         timeout=timeout,
+        **hidden_subprocess_kwargs(),
     )
     output = proc.stdout or ""
     if check and proc.returncode != 0:
@@ -347,6 +379,7 @@ def is_git_available() -> bool:
             stderr=subprocess.STDOUT,
             timeout=10,
             shell=False,
+            **hidden_subprocess_kwargs(),
         )
         return True
     except Exception:
@@ -552,6 +585,7 @@ def commit_staged(path: Path, subject: str, body: str = "") -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         shell=False,
+        **hidden_subprocess_kwargs(),
     )
 
     if diff.returncode == 0:
@@ -1405,7 +1439,7 @@ class GitManagerProApp(tk.Tk):
         title_box = tk.Frame(header, bg=Colors.BG)
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.label(title_box, "Git 项目管理器 Pro v2.3", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
+        self.label(title_box, "Git 项目管理器 Pro v2.4", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
         self.label(
             title_box,
             "管理本地仓库、初始化 GitHub 远程、自动拉取合并、提交前检查、误提交拦截、历史回退。",

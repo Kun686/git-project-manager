@@ -17,6 +17,8 @@
 - 提交前轻量 CI / 安全检查
 - 查看历史提交
 - 回退到历史版本
+- Windows 打包后隐藏 Git 子进程 cmd 闪窗
+- 自带圆角应用图标
 
 ## 运行环境
 
@@ -34,9 +36,11 @@ python git_project_manager.py
 
 ## 打包成 exe
 
+推荐使用项目内的圆角图标：
+
 ```bash
 pip install pyinstaller
-pyinstaller -F -w git_project_manager.py -n Git项目管理器
+pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro --icon assets/app.ico
 ```
 
 生成文件：
@@ -70,9 +74,18 @@ https://github.com/yourname/your-repo.git
 
 ## 常见问题
 
+### 打包后点击按钮会闪 cmd 窗口
+
+v2.4 已修复。工具在 Windows 下调用 Git 子进程时使用隐藏窗口参数：
+
+```text
+STARTF_USESHOWWINDOW
+CREATE_NO_WINDOW
+```
+
 ### 为什么明明配置了 SSH，还是弹 GitHub 登录？
 
-因为你的远程地址是 HTTPS：
+因为远程地址是 HTTPS：
 
 ```text
 https://github.com/yourname/your-repo.git
