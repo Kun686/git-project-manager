@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Git 项目管理器 Pro v2.1
+Git 项目管理器
 ============================================================
 
 定位：
@@ -14,11 +14,11 @@ Git 项目管理器 Pro v2.1
 - 提交前执行轻量 CI 检查
 
 运行：
-    python git_project_manager.py
+    python git_project_manager.py.py
 
 打包：
     pip install pyinstaller
-    pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro
+    pyinstaller -F -w git_project_manager.py.py -n Git项目管理器Pro
 
 说明：
 - 纯 Python 标准库 + Tkinter，方便打包 exe。
@@ -495,10 +495,20 @@ def commit_staged(path: Path, subject: str, body: str = "") -> str:
     return run_git(cmd, path, check=True, timeout=180)
 
 
-def push_current_branch(path: Path, branch: str = DEFAULT_BRANCH, set_upstream: bool = True) -> str:
+def push_current_branch(
+    path: Path,
+    branch: str = DEFAULT_BRANCH,
+    set_upstream: bool = True,
+    emit: Optional[Callable[[str], None]] = None,
+) -> str:
     branch = branch or current_branch(path) or DEFAULT_BRANCH
     if set_upstream:
+        if emit:
+            emit(f"正在推送到远程：git push -u origin {branch}")
         return run_git(["push", "-u", "origin", branch], path, check=True, timeout=300)
+
+    if emit:
+        emit(f"正在推送到远程：git push origin {branch}")
     return run_git(["push", "origin", branch], path, check=True, timeout=300)
 
 
@@ -517,7 +527,11 @@ def remote_branch_exists(path: Path, branch: str) -> bool:
     return bool(out.strip())
 
 
-def pull_remote_before_push(path: Path, branch: str = DEFAULT_BRANCH) -> str:
+def pull_remote_before_push(
+    path: Path,
+    branch: str = DEFAULT_BRANCH,
+    emit: Optional[Callable[[str], None]] = None,
+) -> str:
     """
     推送前自动拉取并合并远程非空仓库。
 
@@ -534,13 +548,30 @@ def pull_remote_before_push(path: Path, branch: str = DEFAULT_BRANCH) -> str:
     branch = branch or current_branch(path) or DEFAULT_BRANCH
 
     if not remote_url(path):
-        return "未配置 origin，跳过远程拉取合并。"
+        msg = "未配置 origin，跳过远程拉取合并。"
+        if emit:
+            emit(msg)
+        return msg
 
     if not remote_branch_exists(path, branch):
-        return f"远程 origin/{branch} 不存在或为空，跳过远程拉取合并。"
+        msg = f"远程 origin/{branch} 不存在或为空，跳过远程拉取合并。"
+        if emit:
+            emit(msg)
+        return msg
 
     logs = [f"检测到远程 origin/{branch} 已存在，开始拉取合并。"]
-    logs.append(run_git(["fetch", "origin", branch], path, check=True, timeout=180))
+    if emit:
+        emit(logs[-1])
+        emit(f"正在执行：git fetch origin {branch}")
+
+    fetch_out = run_git(["fetch", "origin", branch], path, check=True, timeout=180)
+    if fetch_out:
+        logs.append(fetch_out)
+        if emit:
+            emit(fetch_out)
+
+    if emit:
+        emit(f"正在执行：git pull --no-rebase --allow-unrelated-histories origin {branch}")
 
     out = run_git(
         ["pull", "--no-rebase", "--allow-unrelated-histories", "origin", branch],
@@ -548,7 +579,11 @@ def pull_remote_before_push(path: Path, branch: str = DEFAULT_BRANCH) -> str:
         check=True,
         timeout=300,
     )
-    logs.append(out or "远程内容已合并。")
+    final = out or "远程内容已合并。"
+    logs.append(final)
+    if emit:
+        emit(final)
+
     return "\n".join([x for x in logs if x])
 
 
@@ -938,69 +973,93 @@ def commit_and_push_project(
     precheck: bool,
     allow_risky: bool,
     auto_pull_before_push: bool = True,
+    emit: Optional[Callable[[str], None]] = None,
 ) -> str:
     path = project.path_obj
-    logs = [f"项目：{project.name}", f"路径：{project.path}"]
+    logs: List[str] = []
+
+    def add(message: str) -> None:
+        logs.append(message)
+        if emit:
+            emit(message)
+
+    add(f"项目：{project.name}")
+    add(f"路径：{project.path}")
 
     if not is_git_repo(path):
         raise ValueError("当前目录还不是 Git 仓库。请先到【初始化 / GitHub】页初始化。")
 
     if clean_before:
+        add("开始清理 cache/log。")
         removed = clean_cache_and_logs(path)
         if removed:
-            logs.append(f"已清理缓存/日志 {len(removed)} 项。")
+            add(f"已清理缓存/日志 {len(removed)} 项。")
         else:
-            logs.append("没有需要清理的缓存/日志。")
+            add("没有需要清理的缓存/日志。")
 
     if update_gitignore_first:
-        logs.append(ensure_gitignore(path, include_defaults=True))
+        add("开始维护 .gitignore。")
+        add(ensure_gitignore(path, include_defaults=True))
 
+    add("开始读取 Git 改动文件。")
     changed = get_changed_files(path)
     if not changed:
-        logs.append("没有检测到文件变化。")
+        add("没有检测到文件变化。")
         if push:
             if auto_pull_before_push:
-                logs.append(pull_remote_before_push(path, project.default_branch))
-            logs.append(push_current_branch(path, project.default_branch, set_upstream=False))
+                add(pull_remote_before_push(path, project.default_branch, emit=emit))
+            add(push_current_branch(path, project.default_branch, set_upstream=False, emit=emit))
         return "\n".join(logs)
 
+    add(f"检测到改动文件 {len(changed)} 个。")
+
     target_files = files
+    add("开始扫描误提交风险。")
     fatal, warnings = detect_risky_files(path, target_files)
 
     if warnings:
-        logs.append("警告：")
-        logs.extend([f"  - {x}" for x in warnings])
+        add("警告：")
+        for item in warnings:
+            add(f"  - {item}")
 
     if fatal and not allow_risky:
-        logs.append("已阻止提交：检测到疑似误提交文件。")
-        logs.extend([f"  - {x}" for x in fatal])
-        logs.append("处理方式：加入 .gitignore、删除缓存/日志、或明确勾选【允许风险提交】。")
+        add("已阻止提交：检测到疑似误提交文件。")
+        for item in fatal:
+            add(f"  - {item}")
+        add("处理方式：加入 .gitignore、删除缓存/日志、或明确勾选【允许风险提交】。")
         return "\n".join(logs)
 
     if precheck:
+        add("开始执行提交前 CI/安全检查。")
         ok, ci_logs = run_light_ci_checks(path)
-        logs.extend(ci_logs)
+        for line in ci_logs:
+            add(line)
         if not ok and not allow_risky:
-            logs.append("提交前检查未通过，已停止。")
+            add("提交前检查未通过，已停止。")
             return "\n".join(logs)
 
     if backup:
+        add("开始创建提交前备份分支。")
         backup_branch = make_backup_branch(path)
         if backup_branch:
-            logs.append(f"提交前备份分支：{backup_branch}")
+            add(f"提交前备份分支：{backup_branch}")
         else:
-            logs.append("当前仓库无 HEAD，跳过备份分支。")
+            add("当前仓库无 HEAD，跳过备份分支。")
 
+    add("开始暂存文件：git add。")
     stage_files(path, target_files)
-    logs.append(commit_staged(path, subject, body))
+
+    add("开始创建提交：git commit。")
+    add(commit_staged(path, subject, body))
 
     if push:
         if auto_pull_before_push:
-            logs.append(pull_remote_before_push(path, project.default_branch))
-        logs.append(push_current_branch(path, project.default_branch, set_upstream=False))
+            add(pull_remote_before_push(path, project.default_branch, emit=emit))
+        add(push_current_branch(path, project.default_branch, set_upstream=False, emit=emit))
+    else:
+        add("未开启 push，已跳过远程推送。")
 
     return "\n".join(logs)
-
 
 def init_remote_and_push(
     project: GitProject,
@@ -1014,54 +1073,79 @@ def init_remote_and_push(
     precheck: bool,
     allow_risky: bool,
     auto_pull_before_push: bool = True,
+    emit: Optional[Callable[[str], None]] = None,
 ) -> str:
     path = project.path_obj
-    logs = [f"初始化 / 绑定远程：{project.name}", f"路径：{path}"]
+    logs: List[str] = []
 
-    logs.extend(ensure_git_repo(path, branch=branch))
+    def add(message: str) -> None:
+        logs.append(message)
+        if emit:
+            emit(message)
+
+    add(f"初始化 / 绑定远程：{project.name}")
+    add(f"路径：{path}")
+
+    add("开始检查 Git 仓库状态。")
+    for line in ensure_git_repo(path, branch=branch):
+        add(line)
 
     if clean_before:
+        add("开始清理 cache/log。")
         removed = clean_cache_and_logs(path)
-        logs.append(f"已清理缓存/日志 {len(removed)} 项。")
+        add(f"已清理缓存/日志 {len(removed)} 项。")
 
     if update_gitignore_first:
-        logs.append(ensure_gitignore(path, include_defaults=True))
+        add("开始维护 .gitignore。")
+        add(ensure_gitignore(path, include_defaults=True))
 
     if create_ci:
-        logs.append(write_basic_github_actions(path))
+        add("开始检查/生成 GitHub Actions CI。")
+        add(write_basic_github_actions(path))
 
-    logs.append(set_or_add_origin(path, remote))
+    add("开始关联远程 origin。")
+    add(set_or_add_origin(path, remote))
 
+    add("开始扫描误提交风险。")
     fatal, warnings = detect_risky_files(path)
     if warnings:
-        logs.append("警告：")
-        logs.extend([f"  - {x}" for x in warnings])
+        add("警告：")
+        for item in warnings:
+            add(f"  - {item}")
     if fatal and not allow_risky:
-        logs.append("已阻止首次提交：检测到疑似误提交文件。")
-        logs.extend([f"  - {x}" for x in fatal])
+        add("已阻止首次提交：检测到疑似误提交文件。")
+        for item in fatal:
+            add(f"  - {item}")
         return "\n".join(logs)
 
     if precheck:
+        add("开始执行提交前 CI/安全检查。")
         ok, ci_logs = run_light_ci_checks(path)
-        logs.extend(ci_logs)
+        for line in ci_logs:
+            add(line)
         if not ok and not allow_risky:
-            logs.append("提交前检查未通过，已停止。")
+            add("提交前检查未通过，已停止。")
             return "\n".join(logs)
 
+    add("开始暂存文件：git add。")
     stage_files(path, None)
-    logs.append(commit_staged(path, commit_message or "initial commit", ""))
+
+    add("开始创建首次提交：git commit。")
+    add(commit_staged(path, commit_message or "initial commit", ""))
 
     # 首次 commit 后再确保分支名
     if branch:
+        add(f"确保当前分支为：{branch}")
         out = run_git(["branch", "-M", branch], path, check=False, timeout=30)
         if out:
-            logs.append(out)
+            add(out)
 
     if auto_pull_before_push:
-        logs.append(pull_remote_before_push(path, branch))
+        add(pull_remote_before_push(path, branch, emit=emit))
 
-    logs.append(push_current_branch(path, branch, set_upstream=True))
+    add(push_current_branch(path, branch, set_upstream=True, emit=emit))
     return "\n".join(logs)
+
 
 
 # ============================================================
@@ -1244,7 +1328,7 @@ class GitManagerProApp(tk.Tk):
         title_box = tk.Frame(header, bg=Colors.BG)
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.label(title_box, "Git 项目管理器 Pro v2.1", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
+        self.label(title_box, "Git 项目管理器 Pro v2.2", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
         self.label(
             title_box,
             "管理本地仓库、初始化 GitHub 远程、自动拉取合并、提交前检查、误提交拦截、历史回退。",
@@ -1677,6 +1761,18 @@ class GitManagerProApp(tk.Tk):
         else:
             self.log(f"错误：{exc}")
 
+    def emit_realtime_log(self, text: str) -> None:
+        """
+        后台线程不能直接操作 Tk 控件。
+        这里把日志投递回主线程，由 poll_queue 统一写入日志框。
+        """
+        self.task_queue.put((self.log, str(text)))
+
+    def format_exception_for_log(self, exc: Exception) -> str:
+        if isinstance(exc, GitCommandError):
+            return f"Git 命令失败\n目录：{exc.cwd}\n命令：{' '.join(exc.command)}\n输出：\n{exc.output}"
+        return f"错误：{exc}"
+
     def run_background(self, job: Callable[[], object], done: Callable[[object], None]) -> None:
         def runner():
             try:
@@ -1761,12 +1857,14 @@ class GitManagerProApp(tk.Tk):
         subject, body = self.get_subject_body()
 
         def job():
-            logs = []
+            emit = self.emit_realtime_log
+            emit("=" * 72)
+            emit("开始更新项目。")
             for p in projects:
-                logs.append("=" * 72)
+                emit("=" * 72)
                 try:
                     project_files = files if len(projects) == 1 else None
-                    logs.append(commit_and_push_project(
+                    commit_and_push_project(
                         p,
                         subject=subject,
                         body=body,
@@ -1778,22 +1876,23 @@ class GitManagerProApp(tk.Tk):
                         precheck=self.precheck_var.get(),
                         allow_risky=self.allow_risky_var.get(),
                         auto_pull_before_push=self.auto_pull_var.get(),
-                    ))
+                        emit=emit,
+                    )
                 except Exception as exc:
-                    logs.append(f"失败：{p.name}\n{exc}")
-            logs.append("=" * 72)
-            logs.append("全部处理完成。")
-            return "\n".join(logs)
+                    emit(f"失败：{p.name}\n{self.format_exception_for_log(exc)}")
+            emit("=" * 72)
+            emit("全部处理完成。")
+            return {"realtime": True}
 
         def done(result):
             if isinstance(result, Exception):
                 self.log_error(result)
             else:
-                self.log(str(result))
                 self.load_projects()
                 self.refresh_current_project()
 
         self.run_background(job, done)
+
 
     # ---------- init / GitHub ----------
 
@@ -1836,31 +1935,42 @@ class GitManagerProApp(tk.Tk):
             return
 
         def job():
-            return init_remote_and_push(
-                p,
-                remote=remote,
-                branch=branch,
-                commit_message=initial_message,
-                update_gitignore_first=self.gitignore_var.get(),
-                clean_before=self.clean_var.get(),
-                create_ci=self.create_ci_var.get(),
-                precheck=self.precheck_var.get(),
-                allow_risky=self.allow_risky_var.get(),
-                auto_pull_before_push=self.auto_pull_var.get(),
-            )
+            emit = self.emit_realtime_log
+            emit("=" * 72)
+            emit("开始初始化 / 绑定远程 / 推送。")
+            try:
+                init_remote_and_push(
+                    p,
+                    remote=remote,
+                    branch=branch,
+                    commit_message=initial_message,
+                    update_gitignore_first=self.gitignore_var.get(),
+                    clean_before=self.clean_var.get(),
+                    create_ci=self.create_ci_var.get(),
+                    precheck=self.precheck_var.get(),
+                    allow_risky=self.allow_risky_var.get(),
+                    auto_pull_before_push=self.auto_pull_var.get(),
+                    emit=emit,
+                )
+                emit("初始化 / 绑定远程 / 推送流程结束。")
+                return {"ok": True, "realtime": True}
+            except Exception as exc:
+                emit(self.format_exception_for_log(exc))
+                return {"ok": False, "realtime": True}
 
         def done(result):
             if isinstance(result, Exception):
                 self.log_error(result)
             else:
-                p.remote_url = remote
-                p.default_branch = branch
-                self.store.save()
-                self.log(str(result))
+                if isinstance(result, dict) and result.get("ok"):
+                    p.remote_url = remote
+                    p.default_branch = branch
+                    self.store.save()
                 self.load_projects()
                 self.refresh_current_project()
 
         self.run_background(job, done)
+
 
     # ---------- gitignore / clean ----------
 

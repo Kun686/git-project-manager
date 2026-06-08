@@ -1,4 +1,4 @@
-# Git Project Manager 
+# Git Project Manager Pro
 
 一个面向个人开发者的本地 Git 项目管理器。
 
@@ -9,20 +9,13 @@
 - 绑定 GitHub 远程仓库
 - 远程非空仓库自动拉取合并
 - 一键提交 / 推送单个或多个项目
+- 实时运行日志
 - 自动维护 `.gitignore`
 - 自动清理 cache/log
 - 自动阻止日志、虚拟环境、缓存、密钥文件进入 Git
 - 提交前轻量 CI / 安全检查
 - 查看历史提交
 - 回退到历史版本
-
-## 截图
-
-后续可以在这里放软件截图：
-
-```text
-docs/screenshot.png
-```
 
 ## 运行环境
 
@@ -41,13 +34,13 @@ python git_project_manager.py
 
 ```bash
 pip install pyinstaller
-pyinstaller -F -w git_project_manager.py -n Git项目管理器
+pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro
 ```
 
 生成文件：
 
 ```text
-dist/Git项目管理器.exe
+dist/Git项目管理器Pro.exe
 ```
 
 ## GitHub 首次推送流程
@@ -97,15 +90,25 @@ build/
 
 如果检测到疑似 token、password、api_key、secret，也会阻止提交。
 
-## 开发计划
+## 常见问题
 
-- [ ] 更完整的冲突解决界面
-- [ ] GitHub API 自动创建仓库
-- [ ] 支持 GitLab / Gitee
-- [ ] 支持自定义提交前命令
-- [ ] 支持项目分组
-- [ ] 支持主题切换
-- [ ] 支持多语言
+### GitHub push 连接失败
+
+如果日志出现：
+
+```text
+Failed to connect to github.com port 443
+```
+
+这通常不是工具代码问题，而是本机网络、代理、DNS、GitHub 连接或 HTTPS 证书链路问题。
+
+可以改用 SSH 远程地址：
+
+```text
+git@github.com:yourname/your-repo.git
+```
+
+也可以检查本机代理配置。
 
 ## License
 
