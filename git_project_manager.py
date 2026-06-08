@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Git 项目管理器 Pro v2
+Git 项目管理器 Pro v2.1
 ============================================================
 
 定位：
@@ -731,11 +731,26 @@ def detect_risky_files(project_path: Path, files: Optional[List[str]] = None) ->
         for issue in scan_file_content_for_secrets(abs_path):
             fatal.append(f"{rel} {issue}")
 
-        # 冲突标记
+        # Git 冲突标记检测
+        # 旧逻辑只要源码里出现 "<<<<<<<" / "=======" / ">>>>>>>" 字符串就会误报。
+        # 新逻辑只检测真实冲突标记：必须出现在行首。
         try:
             if abs_path.exists() and abs_path.is_file() and abs_path.stat().st_size < 2 * 1024 * 1024:
                 text = abs_path.read_text(encoding="utf-8", errors="ignore")
-                if "<<<<<<< " in text or "=======" in text and ">>>>>>> " in text:
+                has_conflict_start = False
+                has_conflict_middle = False
+                has_conflict_end = False
+
+                for line in text.splitlines():
+                    stripped = line.rstrip()
+                    if stripped.startswith("<<<<<<< "):
+                        has_conflict_start = True
+                    elif stripped == "=======":
+                        has_conflict_middle = True
+                    elif stripped.startswith(">>>>>>> "):
+                        has_conflict_end = True
+
+                if has_conflict_start and has_conflict_middle and has_conflict_end:
                     fatal.append(f"{rel} 可能包含 Git 冲突标记。")
         except Exception:
             pass
@@ -1229,7 +1244,7 @@ class GitManagerProApp(tk.Tk):
         title_box = tk.Frame(header, bg=Colors.BG)
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.label(title_box, "Git 项目管理器 Pro v2", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
+        self.label(title_box, "Git 项目管理器 Pro v2.1", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
         self.label(
             title_box,
             "管理本地仓库、初始化 GitHub 远程、自动拉取合并、提交前检查、误提交拦截、历史回退。",
