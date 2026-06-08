@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Git 项目管理器 Pro v2.4
+Git 项目管理器
 ============================================================
 
 定位：
@@ -18,7 +18,7 @@ Git 项目管理器 Pro v2.4
 
 打包：
     pip install pyinstaller
-    pyinstaller -F -w git_project_manager.py -n Git项目管理器Pro
+    pyinstaller -F -w git_project_manager.py -n Git项目管理器
 
 说明：
 - 纯 Python 标准库 + Tkinter，方便打包 exe。
@@ -50,7 +50,7 @@ from tkinter import ttk
 # App Config
 # ============================================================
 
-APP_NAME = "Git 项目管理器 Pro v2.4"
+APP_NAME = "Git 项目管理器"
 APP_DIR = Path.home() / ".git_project_manager"
 CONFIG_FILE = APP_DIR / "projects_pro.json"
 
@@ -1439,7 +1439,7 @@ class GitManagerProApp(tk.Tk):
         title_box = tk.Frame(header, bg=Colors.BG)
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.label(title_box, "Git 项目管理器 Pro v2.4", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
+        self.label(title_box, "Git 项目管理器", size=18, weight="bold", bg=Colors.BG).pack(anchor="w")
         self.label(
             title_box,
             "管理本地仓库、初始化 GitHub 远程、自动拉取合并、提交前检查、误提交拦截、历史回退。",
